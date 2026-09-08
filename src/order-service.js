@@ -1,5 +1,4 @@
 // 주문 생성/결제 처리입니다.
-// ⚠️ 의도적으로 버그를 심어둔 파일입니다 (markAsPaid 참고).
 const { Pool } = require('pg');
 
 let pool = null;
@@ -38,6 +37,11 @@ async function markAsPaid(orderId, amount) {
   const client = await getPool().connect();
 
   try {
+    // 상태 변경과 결제 내역 기록은 하나의 단위로 성공/실패해야 합니다.
+    // 그렇지 않으면 UPDATE만 커밋되고 INSERT가 실패했을 때
+    // "결제 완료 상태인데 결제 내역이 없는 주문"이 생깁니다.
+    await client.query('BEGIN');
+
     // 주문 상태를 먼저 결제 완료로 바꿉니다.
     await client.query(`UPDATE orders SET status = 'paid' WHERE id = $1`, [orderId]);
 
@@ -46,6 +50,11 @@ async function markAsPaid(orderId, amount) {
       `INSERT INTO payments (order_id, kind, amount) VALUES ($1, 'charge', $2)`,
       [orderId, amount],
     );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
   } finally {
     client.release();
   }
