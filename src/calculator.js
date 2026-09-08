@@ -1,7 +1,7 @@
 // ⚠️ 의도적으로 버그를 심어둔 파일입니다.
 // add()가 뺄셈을 하고 있어서, 운영 중 합계가 틀리게 나오는 상황을 재현합니다.
 function add(a, b) {
-  return a - b; // 버그: 더해야 하는데 빼고 있음
+  return a + b;
 }
 
 function divide(a, b) {
