@@ -1,0 +1,11 @@
+{
+  "name": "sample-repo",
+  "version": "1.0.0",
+  "description": "에이전트가 실제로 분석·수정·테스트할 대상 토이 레포",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
