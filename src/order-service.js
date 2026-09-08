@@ -38,7 +38,10 @@ async function markAsPaid(orderId, amount) {
   const client = await getPool().connect();
 
   try {
-    // 주문 상태를 먼저 결제 완료로 바꿉니다.
+    // 상태 변경과 결제 내역 기록은 하나의 트랜잭션으로 묶어야 합니다.
+    await client.query('BEGIN');
+
+    // 주문 상태를 결제 완료로 바꿉니다.
     await client.query(`UPDATE orders SET status = 'paid' WHERE id = $1`, [orderId]);
 
     // 그다음 결제 내역을 남깁니다.
@@ -46,6 +49,17 @@ async function markAsPaid(orderId, amount) {
       `INSERT INTO payments (order_id, kind, amount) VALUES ($1, 'charge', $2)`,
       [orderId, amount],
     );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    // 둘 중 하나라도 실패하면 상태 변경까지 함께 되돌립니다.
+    // ROLLBACK 자체가 실패해도 원래 실패 원인을 덮어쓰지 않도록 삼킵니다.
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      err.rollbackError = rollbackErr;
+    }
+    throw err;
   } finally {
     client.release();
   }
@@ -60,4 +74,12 @@ async function cancelOrder(orderId) {
   await getPool().query(`UPDATE orders SET status = 'cancelled' WHERE id = $1`, [orderId]);
 }
 
-module.exports = { createOrder, markAsPaid, cancelOrder };
+/**
+ * 연결 풀을 닫습니다. 테스트 종료 시 호출합니다.
+ */
+async function closePool() {
+  await pool?.end();
+  pool = null;
+}
+
+module.exports = { createOrder, markAsPaid, cancelOrder, closePool };
