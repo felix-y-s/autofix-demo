@@ -22,9 +22,9 @@ function getPool() {
  * @returns {Promise<number>} 최종 금액
  */
 async function calculateOrderTotal(orderId) {
-  // 주문에 속한 결제 항목을 모두 합칩니다.
+  // 주문에 속한 결제 항목을 합산합니다. charge는 더하고 refund는 뺍니다.
   const { rows } = await getPool().query(
-    `SELECT COALESCE(SUM(amount), 0) AS total
+    `SELECT COALESCE(SUM(CASE WHEN kind = 'refund' THEN -amount ELSE amount END), 0) AS total
        FROM payments
       WHERE order_id = $1`,
     [orderId],
