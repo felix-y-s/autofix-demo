@@ -1,5 +1,4 @@
 // 주문 관련 DB 조회를 담당합니다.
-// ⚠️ 의도적으로 버그를 심어둔 파일입니다 (calculateOrderTotal 참고).
 const { Pool } = require('pg');
 
 let pool = null;
@@ -24,7 +23,7 @@ function getPool() {
 async function calculateOrderTotal(orderId) {
   // 주문에 속한 결제 항목을 모두 합칩니다.
   const { rows } = await getPool().query(
-    `SELECT COALESCE(SUM(amount), 0) AS total
+    `SELECT COALESCE(SUM(CASE WHEN kind = 'refund' THEN -amount ELSE amount END), 0) AS total
        FROM payments
       WHERE order_id = $1`,
     [orderId],
