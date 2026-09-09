@@ -49,19 +49,37 @@ function validateOrder(order, payments) {
 
 /**
  * 주문 목록을 정산합니다.
+ * 개별 주문이 데이터 규칙을 위반하더라도(InvariantViolationError) 그 주문 하나만
+ * 정산에서 제외하고 배치는 계속 진행합니다. 한 건의 잘못된 데이터 때문에
+ * 나머지 정상 주문까지 전부 정산 실패로 처리되어서는 안 되기 때문입니다.
+ * 다만 그 위반 사실 자체는 은폐하지 않고 콘솔에 남겨 모니터링(Sentry 등)이
+ * 계속 감지할 수 있게 하고, skipped 목록으로도 호출자에게 알립니다.
  * @param {Array<{order: object, payments: Array}>} entries 정산 대상
- * @returns {Promise<number>} 정산 총액
+ * @returns {Promise<{total: number, skipped: Array<{order: object, error: InvariantViolationError}>}>}
+ *   total: 정산 총액, skipped: 데이터 규칙 위반으로 정산에서 제외된 주문 목록
  */
 async function settleOrders(entries) {
   let total = 0;
+  const skipped = [];
 
   for (const { order, payments } of entries) {
-    // 검증을 통과한 주문만 정산에 포함합니다.
-    validateOrder(order, payments);
+    try {
+      // 검증을 통과한 주문만 정산에 포함합니다.
+      validateOrder(order, payments);
+    } catch (err) {
+      if (err instanceof InvariantViolationError) {
+        // 이 주문만 정산에서 제외합니다. 문제를 조용히 묻지 않고
+        // 콘솔(운영에서는 로그 수집기/Sentry)로 남기고 결과에도 포함시킵니다.
+        console.error('[settlement] 주문 데이터 규칙 위반으로 정산에서 제외:', err.message, err.context);
+        skipped.push({ order, error: err });
+        continue;
+      }
+      throw err;
+    }
     total += await calculateOrderTotal(order.id);
   }
 
-  return total;
+  return { total, skipped };
 }
 
 module.exports = { settleOrders, validateOrder, InvariantViolationError };
